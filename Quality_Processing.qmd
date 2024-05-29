@@ -1,0 +1,650 @@
+---
+title: "Processing Quality Data"
+author: "Logan Johnson"
+date: "May 23, 2024"
+date-modified: "today"
+format:
+  html:
+    theme: flatly
+    fig-width: 6
+    fig-asp: 0.618
+execute: 
+  eval: true
+  echo: true
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r, Loading Libraries}
+#| label: Loading Libraries
+#| include: false
+
+library(tidyverse)
+library(ggthemes)
+library(scales)
+
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, 
+                      fig.width = 6, fig.asp = 0.618)
+
+logan_palette <- scale_fill_manual(values = c("#999999", "#E69F00",
+                                              "#0072B2", "black"))
+
+```
+
+This document summarizes the cleaning steps for the quality data sets of the various studies conducted during 2022 to present. This document organizes the data into well named columns with necessary units and consistent names where possible across these studies. This also outputs the cleaned data sets as .csv files for further analysis. Alternatively, with a few lines of code, .xlsx files could be created.
+
+| File Name        | Samples (n) | Days Aged | Protein Fraction           | Notes                                     |
+|--------------|--------------|--------------|--------------|-------------------|
+| P1050            | 100         | 12-14     | Sarcoplasmic               | Original A, B, C, D. Same loins as P1116  |
+| P1116            | 100         | 12-14     | Myofibrillar               | Original A, B, C, D. Same loins as P1050. |
+| P1226            | 50          | 12-14     | Sarcoplasmic               |                                           |
+| P1259            | 50          | 1, 7, 14  | Sarcoplasmic               | Same loins as P1319.                      |
+| P1319            | 50          | 1, 7, 14  | Purge                      | Same loins as P1259.                      |
+| Calcium Chloride | 106         | 14        | Sarcoplasmic, Whole Muscle |                                           |
+
+::: panel-tabset
+# P1050_P1116
+
+## Cleaning the Quality Data Files
+
+This is the original files containing the quality data for the P1050 and P1116 experiments. The pork loins were the same, thus only one quality data file exists. I have put in different "Sarco\_" and "Myo\_" labels associated with the different quality groupings we evaluated.
+
+```{r, P1050_P1116 Quality Cleaning}
+#| label: P1050_P1116 Quality Cleaning
+#| include: true
+#| eval: true
+#| code-fold: false
+
+P1050_P1116 <- readr::read_csv(file = "Data/P1050_P1116/P1050_P1116_Raw_Quality.csv") %>% 
+  dplyr::filter(!is.na(slaughter.date))
+
+glimpse(P1050_P1116)
+
+```
+
+This involves the processing steps for the quality data of P1050_P1116.
+
+```{r}
+#| include: true
+#| eval: true
+#| code-fold: true
+
+colnames(P1050_P1116) <- colnames(P1050_P1116) %>% 
+  stringr::str_replace_all(pattern = "\\.", replacement = " ") %>% 
+  stringr::str_to_title() %>% 
+  stringr::str_replace_all(pattern = "Ph", replacement = "pH") %>% 
+  stringr::str_replace(pattern = " G", replacement = " g") %>% 
+  stringr::str_replace_all(pattern = "Tmt", replacement = "TMT") %>% 
+  stringr::str_replace_all(pattern = "\\%", replacement = "perc") %>% 
+  stringr::str_replace_all(pattern = " ", replacement = "_")
+  
+P1050_P1116 <- P1050_P1116 %>% 
+  dplyr::mutate(Slaughter_Date = paste0(Slaughter_Date, "-20")) %>% 
+  dplyr::mutate(Slaughter_Date = 
+                  lubridate::parse_date_time(Slaughter_Date, orders = "d-m-y"),
+                Sensory_Date = 
+                  lubridate::parse_date_time(Sensory_Date, orders = "m/d/y"),
+                Day_Aged = Sensory_Date - Slaughter_Date) %>% 
+  dplyr::rename(Sensory_Comment = "Off_Flavor_Desc_",
+                Lipid_perc = "Lipid",
+                Moisture_perc = "Moisture",
+                Average_Star_Probe_kg = "Average_Star_Probe",
+                Day_1_pH = "24h_pH",
+                Average_Aged_pH = "Average_pH",
+                Cook_Loss_perc = "Cookloss_perc",
+                Sensory_Tenderness = "Tenderness",
+                Sensory_Chewiness = "Chewiness",
+                Sensory_Juiciness = "Juiciness",
+                Sensory_Pork_Flavor = "Flavor",
+                Sensory_Off_Flavor = "Off_Flavor")
+
+P1050_P1116 <- P1050_P1116 %>% 
+  dplyr::mutate(Sarco_Color_Category = 
+                  stringr::str_to_title(Sarco_Color_Category),
+                Sensory_Comment = 
+                  stringr::str_to_title(Sensory_Comment),
+                Sarco_Purge_Category = 
+                  stringr::str_to_title(Sarco_Purge_Category),
+                Gender = 
+                  stringr::str_to_title(Gender))
+
+# This just matches the tmt number with the actual tmt tag
+P1050_P1116 <- P1050_P1116 %>% 
+  dplyr::mutate(
+    Sarco_TMT_Tag = case_when(
+      Sarco_TMT_Tag == "1" ~ "126.",
+      Sarco_TMT_Tag == "2" ~ "127N",
+      Sarco_TMT_Tag == "3" ~ "127C",
+      Sarco_TMT_Tag == "4" ~ "128N",
+      Sarco_TMT_Tag == "5" ~ "128C",
+      Sarco_TMT_Tag == "6" ~ "129N",
+      Sarco_TMT_Tag == "7" ~ "129C",
+      Sarco_TMT_Tag == "8" ~ "130N",
+      Sarco_TMT_Tag == "9" ~ "130C",
+      Sarco_TMT_Tag == "10" ~ "131N"),
+    Myo_TMT_Tag = case_when(
+      Myo_TMT_Tag == "1" ~ "126.",
+      Myo_TMT_Tag == "2" ~ "127N",
+      Myo_TMT_Tag == "3" ~ "127C",
+      Myo_TMT_Tag == "4" ~ "128N",
+      Myo_TMT_Tag == "5" ~ "128C",
+      Myo_TMT_Tag == "6" ~ "129N",
+      Myo_TMT_Tag == "7" ~ "129C",
+      Myo_TMT_Tag == "8" ~ "130N",
+      Myo_TMT_Tag == "9" ~ "130C",
+      Myo_TMT_Tag == "10" ~ "131N"),
+    Sarco_TMT_Run = stringr::str_pad(Sarco_TMT_Run, side = "left", 
+                                     pad = "0", width = 2),
+    Sarco_TMT_Run = stringr::str_pad(Sarco_TMT_Run, side = "left", 
+                                     pad = "F", width = 3),
+    Myo_TMT_Run = stringr::str_pad(Myo_TMT_Run, side = "left", 
+                                   pad = "0", width = 2),
+    Myo_TMT_Run = stringr::str_pad(Myo_TMT_Run, side = "left", 
+                                   pad = "F", width = 3))
+
+P1050_P1116 <- P1050_P1116 %>% 
+  dplyr::select(Slaughter_Date, Sensory_Date, Day_Aged, Carcass_Number, 
+                Sireline, Gender, Day_1_pH, Average_Aged_pH, Loin_Purge_perc,
+                Chop_Purge_perc, Visual_Color, Average_L, Visual_Marbling,
+                Lipid_perc, Moisture_perc, Cook_Loss_perc, Sensory_Tenderness, 
+                Sensory_Chewiness, Sensory_Juiciness, Sensory_Pork_Flavor, 
+                Sensory_Off_Flavor, Sensory_Comment,
+                Average_Star_Probe_kg:Myo_TMT_Tag)
+
+```
+
+This is the processed and cleaned quality data set for P1050_P1116.
+
+```{r}
+#| include: true
+#| eval: true
+#| code-fold: false
+
+glimpse(P1050_P1116)
+
+# write the processed data file
+# readr::write_csv(x = P1050_P1116,
+#                  file = "Data/P1050_P1116/P1050_P1116_Processed_Quality.csv")
+
+```
+
+# P1226
+
+## Cleaning the Quality Data Files
+
+This is the original files containing the quality data for the P1226 experiment. Only the most tender and tough of this population were evaluated for proteomics and metabolomics.
+
+```{r, P1226 Quality Cleaning}
+#| label: P1226 Quality Cleaning
+#| include: true
+#| eval: true
+#| code-fold: false
+
+# Only selecting A and D 
+P1226 <- readr::read_csv(file = "Data/P1226/P1226_Raw_Quality.csv") %>% 
+  dplyr::filter(Category %in% c("A","D")) %>% 
+  dplyr::mutate(Loin.Number = stringr::str_pad(Loin.Number, side = "left",
+                                               pad = "0", width = 2),
+                `TMT TAG` = as.numeric(`TMT TAG`))
+
+glimpse(P1226)
+
+```
+
+This involves the processing steps for the quality data of P1226.
+
+```{r}
+#| include: true
+#| eval: true
+#| code-fold: true
+
+colnames(P1226) <- colnames(P1226) %>% 
+  stringr::str_replace_all(pattern = "\\.", replacement = " ") %>% 
+  stringr::str_to_title() %>% 
+  stringr::str_replace_all(pattern = "\\*", replacement = "") %>% 
+  stringr::str_replace_all(pattern = " &", replacement = "") %>% 
+  stringr::str_replace_all(pattern = "\\%", replacement = "perc") %>% 
+  stringr::str_replace(pattern = " A", replacement = " a") %>%
+  stringr::str_replace(pattern = " B", replacement = " b") %>%
+  stringr::str_replace_all(pattern = " Ph", replacement = " pH") %>%
+  stringr::str_replace_all(pattern = "Tmt", replacement = "Sarco_TMT") %>%
+  stringr::str_replace_all(pattern = " ", replacement = "_")
+
+P1226 <- P1226 %>% 
+  dplyr::rename(Slaughter_Date = "Harvest_Group",
+                Average_L = "Chop_L",
+                Average_a = "Chop_a",
+                Average_b = "Chop_b",
+                Average_Aged_pH = "Chop_pH",
+                Average_Star_Probe_kg = "Star_Probe",
+                Cook_Loss_perc = "Cook_Loss",
+                Visual_Marbling = "Marbling_Score",
+                Lipid_perc = "Fat_perc",
+                Sarco_Tenderness_Category = "Category",
+                Sensory_Tenderness = "Tenderness",
+                Sensory_Chewiness = "Chewiness",
+                Sensory_Juiciness = "Juiciness",
+                Sensory_Pork_Flavor = "Flavor",
+                Sensory_Off_Flavor = "Off_Flavor") %>% 
+  dplyr::mutate(Sample_Name = as.numeric(paste0(Slaughter_Date, Loin_Number)),
+                .after = Loin_Number) %>% 
+  dplyr::relocate(Sarco_TMT_Tag, .after = Sarco_TMT_Run) %>% 
+  dplyr::arrange(Sarco_TMT_Run, Sarco_TMT_Tag)
+
+# This just matches the tmt number with the actual tmt tag
+P1226 <- P1226 %>% 
+  dplyr::mutate(
+    Sarco_TMT_Tag = case_when(
+      Sarco_TMT_Tag == "1" ~ "126.",
+      Sarco_TMT_Tag == "2" ~ "127N",
+      Sarco_TMT_Tag == "3" ~ "127C",
+      Sarco_TMT_Tag == "4" ~ "128N",
+      Sarco_TMT_Tag == "5" ~ "128C",
+      Sarco_TMT_Tag == "6" ~ "129N",
+      Sarco_TMT_Tag == "7" ~ "129C",
+      Sarco_TMT_Tag == "8" ~ "130N",
+      Sarco_TMT_Tag == "9" ~ "130C",
+      Sarco_TMT_Tag == "10" ~ "131N"),
+    Sarco_TMT_Run = stringr::str_pad(Sarco_TMT_Run, side = "left", 
+                                     pad = "0", width = 2),
+    Sarco_TMT_Run = stringr::str_pad(Sarco_TMT_Run, side = "left", 
+                                     pad = "F", width = 3)) %>% 
+  dplyr::select(Slaughter_Date, Loin_Number, Sample_Name, Average_Aged_pH,
+                Loin_Purge_perc, Visual_Color, Average_L, Average_a,
+                Average_b, Chop_Firmness, Visual_Marbling, Lipid_perc, 
+                Moisture_perc, Cook_Loss_perc, Sensory_Tenderness, 
+                Sensory_Chewiness, Sensory_Juiciness, Sensory_Pork_Flavor, 
+                Sensory_Off_Flavor, Average_Star_Probe_kg,
+                Sarco_Tenderness_Category, Sarco_TMT_Run, Sarco_TMT_Tag)
+
+# Here, I reclassified the samples to match the categories from P1050.
+# A = Average_Star_Probe_kg: 3.43 - 4.55 kg;   25 samples categorized to A
+# B = Average_Star_Probe_kg: 4.66 - 5.00 kg;   0  samples categorized to B
+# C = Average_Star_Probe_kg: 5.20 - 5.64 kg;   20 samples categorized to C
+# D = Average_Star_Probe_kg: 5.70 - 7.41 kg;   5  samples categorized to D
+
+P1226 <- P1226 %>% 
+  dplyr::mutate(
+    P1050_Tenderness_Category = case_when(
+      Average_Star_Probe_kg < 4.55 ~ "A",
+      Average_Star_Probe_kg >= 4.66 & Average_Star_Probe_kg <= 5.00 ~ "B",
+      Average_Star_Probe_kg >= 5.20 & Average_Star_Probe_kg <= 5.64 ~ "C",
+      Average_Star_Probe_kg >= 5.70 & Average_Star_Probe_kg <= 7.41 ~ "D"),
+    .after = Sarco_Tenderness_Category)
+
+```
+
+This is the processed and cleaned quality data set for P1226 study.
+
+```{r}
+#| include: true
+#| eval: true
+#| code-fold: false
+
+glimpse(P1226)
+
+# readr::write_csv(P1226, file = "Data/P1226/P1226_Processed_Quality.csv")
+
+```
+
+# P1259_P1319
+
+## Cleaning the Quality Data Files
+
+This is the original files containing the quality data for the P1259 and P1319 experiments. The pork loins were the same, thus only one quality data file exists. Here, the sarcoplasmic and purge protein fractions were evaluated over 3 days of postmortem aging: 1, 7, and 14. There are two groupings of pH: High and Low.
+
+```{r, P1259 Quality Cleaning}
+#| label: P1259 Quality Cleaning
+#| eval: true
+#| include: true
+#| code-fold: false
+
+P1259_P1319 <- readr::read_csv(file = "Data/P1259_P1319/P1259_P1319_Raw_Quality.csv") %>% 
+  dplyr::filter(!is.na(Loin.ID))
+
+glimpse(P1259_P1319)
+
+```
+
+This involves the processing steps for the quality data of P1259_P1319.
+
+```{r}
+#| eval: true
+#| include: true
+#| code-fold: true
+
+P1259_P1319 <- P1259_P1319 %>% 
+  dplyr::group_by(Loin.ID) %>% 
+  dplyr::mutate(
+    Driploss_A_perc = 
+      ((Drip.Before.A.g - Drip.After.A.g)/ Drip.Before.A.g)*100,
+    Driploss_B_perc = 
+      ((Drip.Before.B.g - Drip.After.B.g)/ Drip.Before.B.g)*100,
+    Average_Driploss_D01 = mean(c(Driploss_A_perc, Driploss_B_perc)),
+    Average_Star_Probe_kg_D01 = mean(c(D1.1.SP, D1.2.SP, D1.3.SP, 
+                                       D1.4.SP, D1.5.SP, D1.6.SP)),
+    Average_Star_Probe_kg_D07 = mean(c(D7.1.SP, D7.2.SP, D7.3.SP, 
+                                       D7.4.SP, D7.5.SP, D7.6.SP)),
+    Average_Star_Probe_kg_D14 = mean(c(D14.1.SP, D14.2.SP, D14.3.SP, 
+                                       D14.4.SP, D14.5.SP, D14.6.SP)),
+    Cook_Loss_perc_D01 = 
+      ((D1.Cookloss.Raw.g - D1.Cookloss.Cooked.g) / D1.Cookloss.Raw.g)*100,
+    Cook_Loss_perc_D07 = 
+      ((D7.Cookloss.Raw.g - D7.Cookloss.Cooked.g) / D7.Cookloss.Raw.g)*100,
+    Cook_Loss_perc_D14 = 
+      ((D14.Cookloss.Raw.g - D14.Cookloss.Cooked.g) / D14.Cookloss.Raw.g)*100,
+    Sensory_Tenderness = 
+      round(mean(c(Tenderness.1, Tenderness.2, Tenderness.3))),
+    Sensory_Chewiness = 
+      round(mean(c(Chewiness.1, Chewiness.2, Chewiness.3))),
+    Sensory_Juiciness = 
+      round(mean(c(Juiciness.1, Juiciness.2, Juiciness.3))),
+    Sensory_Pork_Flavor = 
+      round(mean(c(`Pork Flavor.1`,`Pork Flavor.2`,`Pork Flavor.3`))),
+    Sensory_Off_Flavor = 
+      round(mean(c(`Off Flavor.1`,`Off Flavor.2`,`Off Flavor.3`))))
+
+P1259_P1319 <- P1259_P1319 %>% 
+  dplyr::rename(
+    Loin_Number = "Loin.ID",
+    Plant_pH_Class = "Classification.Plant.pH",
+    Plant_pH_D01 = "D1.Plant.pH", 
+    Lab_pH_D01 = "D1.Lab.pH",
+    Visual_Color_D01 = "D1.Color",
+    Visual_Marbling_D01 = "D1.Marbling",
+    L_Value_D01 = "D1.L",
+    a_Value_D01 = "D1.a",
+    b_Value_D01 = "D1.b",
+    Visual_Color_D14 = "D14.Color.Score",
+    Visual_Marbling_D14 = "D14.Marbling.Score",
+    Lab_pH_D14 = "D14.pH",
+    L_Value_D14 = "D14.L",
+    a_Value_D14 = "D14.a",
+    b_Value_D14 = "D14.b",
+    Sensory_Comment_1 = "Comments.1",
+    Sensory_Comment_2 = "Comments.2",
+    Sensory_Comment_3 = "Comments.3") %>% 
+  dplyr::mutate(
+    Slaughter_Date = 
+      lubridate::parse_date_time(Slaughter_Date, orders = "m/d/y"),
+    Fabrication_Date = 
+      lubridate::parse_date_time(Fabrication_Date, orders = "m/d/y"))
+
+# Here, I reclassified all the samples to match the star probe categories from P1050.
+# A = Average.Star.Probe: 3.43 - 4.55 kg;   24 samples categorized to A
+# B = Average.Star.Probe: 4.66 - 5.00 kg;   8  samples categorized to B
+# C = Average.Star.Probe: 5.20 - 5.64 kg;   4 samples categorized to C
+# D = Average.Star.Probe: 5.70 - 7.41 kg;   8  samples categorized to D
+
+P1259_P1319 <- P1259_P1319 %>% 
+  dplyr::mutate(
+    P1050_Tenderness_Category = case_when(
+      Average_Star_Probe_kg_D14 < 4.55 ~ "A",
+      Average_Star_Probe_kg_D14 >= 4.66 & Average_Star_Probe_kg_D14 <= 5.00 ~ "B",
+      Average_Star_Probe_kg_D14 >= 5.20 & Average_Star_Probe_kg_D14 <= 5.64 ~ "C",
+      Average_Star_Probe_kg_D14 >= 5.70 & Average_Star_Probe_kg_D14 <= 7.41 ~ "D",
+      TRUE ~ NA)) 
+
+P1259_P1319 <- P1259_P1319 %>% 
+  dplyr::mutate(
+    Sarco_TMT_Tag_D01 = case_when(
+      Sarco_D1_TMT_Tag == "1" ~ "126.",
+      Sarco_D1_TMT_Tag == "2" ~ "127N",
+      Sarco_D1_TMT_Tag == "3" ~ "127C",
+      Sarco_D1_TMT_Tag == "4" ~ "128N",
+      Sarco_D1_TMT_Tag == "5" ~ "128C",
+      Sarco_D1_TMT_Tag == "6" ~ "129N",
+      Sarco_D1_TMT_Tag == "7" ~ "129C",
+      Sarco_D1_TMT_Tag == "8" ~ "130N",
+      Sarco_D1_TMT_Tag == "9" ~ "130C",
+      Sarco_D1_TMT_Tag == "10" ~ "131N",
+      TRUE ~ NA),
+    Sarco_TMT_Tag_D07 = case_when(
+      Sarco_D7_TMT_Tag == "1" ~ "126.",
+      Sarco_D7_TMT_Tag == "2" ~ "127N",
+      Sarco_D7_TMT_Tag == "3" ~ "127C",
+      Sarco_D7_TMT_Tag == "4" ~ "128N",
+      Sarco_D7_TMT_Tag == "5" ~ "128C",
+      Sarco_D7_TMT_Tag == "6" ~ "129N",
+      Sarco_D7_TMT_Tag == "7" ~ "129C",
+      Sarco_D7_TMT_Tag == "8" ~ "130N",
+      Sarco_D7_TMT_Tag == "9" ~ "130C",
+      Sarco_D7_TMT_Tag == "10" ~ "131N",
+      TRUE ~ NA),
+    Sarco_TMT_Tag_D14 = case_when(
+      Sarco_D14_TMT_Tag == "1" ~ "126.",
+      Sarco_D14_TMT_Tag == "2" ~ "127N",
+      Sarco_D14_TMT_Tag == "3" ~ "127C",
+      Sarco_D14_TMT_Tag == "4" ~ "128N",
+      Sarco_D14_TMT_Tag == "5" ~ "128C",
+      Sarco_D14_TMT_Tag == "6" ~ "129N",
+      Sarco_D14_TMT_Tag == "7" ~ "129C",
+      Sarco_D14_TMT_Tag == "8" ~ "130N",
+      Sarco_D14_TMT_Tag == "9" ~ "130C",
+      Sarco_D14_TMT_Tag == "10" ~ "131N",
+      TRUE ~ NA),
+    Purge_TMT_Tag_D01 = case_when(
+      Purge_D1_TMT_Tag == "1" ~ "126.",
+      Purge_D1_TMT_Tag == "2" ~ "127N",
+      Purge_D1_TMT_Tag == "3" ~ "127C",
+      Purge_D1_TMT_Tag == "4" ~ "128N",
+      Purge_D1_TMT_Tag == "5" ~ "128C",
+      Purge_D1_TMT_Tag == "6" ~ "129N",
+      Purge_D1_TMT_Tag == "7" ~ "129C",
+      Purge_D1_TMT_Tag == "8" ~ "130N",
+      Purge_D1_TMT_Tag == "9" ~ "130C",
+      Purge_D1_TMT_Tag == "10" ~ "131N",
+      TRUE ~ NA),
+    Purge_TMT_Tag_D07 = case_when(
+      Purge_D7_TMT_Tag == "1" ~ "126.",
+      Purge_D7_TMT_Tag == "2" ~ "127N",
+      Purge_D7_TMT_Tag == "3" ~ "127C",
+      Purge_D7_TMT_Tag == "4" ~ "128N",
+      Purge_D7_TMT_Tag == "5" ~ "128C",
+      Purge_D7_TMT_Tag == "6" ~ "129N",
+      Purge_D7_TMT_Tag == "7" ~ "129C",
+      Purge_D7_TMT_Tag == "8" ~ "130N",
+      Purge_D7_TMT_Tag == "9" ~ "130C",
+      Purge_D7_TMT_Tag == "10" ~ "131N",
+      TRUE ~ NA),
+    Purge_TMT_Tag_D14 = case_when(
+      Purge_D14_TMT_Tag == "1" ~ "126.",
+      Purge_D14_TMT_Tag == "2" ~ "127N",
+      Purge_D14_TMT_Tag == "3" ~ "127C",
+      Purge_D14_TMT_Tag == "4" ~ "128N",
+      Purge_D14_TMT_Tag == "5" ~ "128C",
+      Purge_D14_TMT_Tag == "6" ~ "129N",
+      Purge_D14_TMT_Tag == "7" ~ "129C",
+      Purge_D14_TMT_Tag == "8" ~ "130N",
+      Purge_D14_TMT_Tag == "9" ~ "130C",
+      Purge_D14_TMT_Tag == "10" ~ "131N",
+      TRUE ~ NA),
+    
+    Sarco_TMT_Run_D01 = stringr::str_pad(Sarco_D1_TMT_Run, side = "left", 
+                                         pad = "0", width = 2),
+    Sarco_TMT_Run_D01 = stringr::str_pad(Sarco_TMT_Run_D01, side = "left", 
+                                         pad = "F", width = 3),
+    Sarco_TMT_Run_D07 = stringr::str_pad(Sarco_D7_TMT_Run, side = "left", 
+                                         pad = "0", width = 2),
+    Sarco_TMT_Run_D07 = stringr::str_pad(Sarco_TMT_Run_D07, side = "left", 
+                                         pad = "F", width = 3),
+    Sarco_TMT_Run_D14 = stringr::str_pad(Sarco_D14_TMT_Run, side = "left", 
+                                         pad = "0", width = 2),
+    Sarco_TMT_Run_D14 = stringr::str_pad(Sarco_TMT_Run_D14, side = "left", 
+                                         pad = "F", width = 3),
+    
+    Purge_TMT_Run_D01 = stringr::str_pad(Purge_D1_TMT_Run, side = "left", 
+                                         pad = "0", width = 2),
+    Purge_TMT_Run_D01 = stringr::str_pad(Purge_TMT_Run_D01, side = "left", 
+                                         pad = "F", width = 3),
+    Purge_TMT_Run_D07 = stringr::str_pad(Purge_D7_TMT_Run, side = "left", 
+                                         pad = "0", width = 2),
+    Purge_TMT_Run_D07 = stringr::str_pad(Purge_TMT_Run_D07, side = "left", 
+                                         pad = "F", width = 3),
+    Purge_TMT_Run_D14 = stringr::str_pad(Purge_D14_TMT_Run, side = "left", 
+                                         pad = "0", width = 2),
+    Purge_TMT_Run_D14 = stringr::str_pad(Purge_TMT_Run_D14, side = "left", 
+                                         pad = "F", width = 3))
+
+
+P1259_P1319 <- P1259_P1319 %>% 
+  dplyr::select(Slaughter_Date, Fabrication_Date, Loin_Number, Plant_pH_Class, 
+                Plant_pH_D01, Lab_pH_D01, Lab_pH_D14, Average_Driploss_D01,
+                Visual_Color_D01, L_Value_D01, a_Value_D01, b_Value_D01, 
+                Visual_Color_D14, L_Value_D14, a_Value_D14, b_Value_D14, 
+                Visual_Marbling_D01, Visual_Marbling_D14, Cook_Loss_perc_D01,
+                Cook_Loss_perc_D07, Cook_Loss_perc_D14, Average_Star_Probe_kg_D01,
+                Average_Star_Probe_kg_D07, Average_Star_Probe_kg_D14,
+                Sensory_Tenderness, Sensory_Chewiness, Sensory_Juiciness,
+                Sensory_Pork_Flavor, Sensory_Off_Flavor, Sensory_Comment_1,
+                Sensory_Comment_2, Sensory_Comment_3, P1050_Tenderness_Category,
+                Sarco_TMT_Run_D01, Sarco_TMT_Tag_D01, Sarco_TMT_Run_D07,
+                Sarco_TMT_Tag_D07, Sarco_TMT_Run_D14, Sarco_TMT_Tag_D14, 
+                Purge_TMT_Run_D01, Purge_TMT_Tag_D01, Purge_TMT_Run_D07, 
+                Purge_TMT_Tag_D07, Purge_TMT_Run_D14, Purge_TMT_Tag_D14)
+
+
+```
+
+This is the processed and cleaned quality data set for P1259_P1319.
+
+```{r}
+#| eval: true
+#| include: true
+#| code-fold: false
+
+glimpse(P1259_P1319)
+
+# readr::write_csv(P1259_P1319, file = "Data/P1259_P1319/P1259_P1319_Processed_Quality.csv")
+
+```
+
+# Calcium Chloride
+
+## Cleaning the Quality Data Files
+
+These data are from a population of pigs fed a diet containing calcium chloride at various phases of finishing to slow down growth. This was a continuation of research from the start of the 2020 COVID-19 pandemic. These data include the quality and growth performance data, or at least the average daily gain, loin and fat ultrasound, and the meat quality measurements.
+
+```{r, Calcium Chloride Quality Cleaning}
+#| label: Calcium Chloride Quality Cleaning
+#| include: true
+#| eval: true
+#| code-fold: false
+
+Ca_Cl2 <- readr::read_csv(file = "Data/Calcium_Chloride/Calcium_Chloride_Raw_Quality.csv")
+
+glimpse(Ca_Cl2)
+
+```
+
+This involves the processing steps for the growth performance and quality data of the calcium chloride study.
+
+```{r}
+#| include: true
+#| eval: true
+#| code-fold: true
+
+colnames(Ca_Cl2) <- colnames(Ca_Cl2) %>% 
+  stringr::str_replace_all(pattern = "\\.", replacement = " ") %>% 
+  stringr::str_replace_all(pattern = "\\*", replacement = "") %>% 
+  stringr::str_replace_all(pattern = " &", replacement = "") %>% 
+  stringr::str_replace_all(pattern = "\\(", replacement = "") %>% 
+  stringr::str_replace_all(pattern = "\\)", replacement = "") %>% 
+  stringr::str_replace_all(pattern = "\\%", replacement = "perc") %>% 
+  stringr::str_replace_all(pattern = "/", replacement = ".") %>% 
+  stringr::str_replace_all(pattern = " ", replacement = "_") %>% 
+  stringr::str_replace_all(pattern = "___", replacement = "_")
+
+Ca_Cl2 <- Ca_Cl2 %>% 
+  dplyr::rename(Pen_Number = "Pen",
+                Loin_in_Bag_lbs = "Package_Weight",
+                Loin_out_Bag_lbs = "Post_Weight",
+                Purge_perc = "perc_Purge",
+                Visual_Color = "Color",
+                Visual_Marbling = "Marbling",
+                L_Value = "L",
+                a_Value = "a",
+                b_value = "b",
+                Aged_pH = "pH",
+                Trial_Weight_kg_5.5.2022 = "5.5_Weight_kg",
+                Trial_Weight_kg_6.2.2022 = "6.2_Weight_kg",
+                Trial_Weight_kg_7.1.2022 = "7.1_Weight_kg",
+                Trial_Weight_kg_8.1.2022 = "8.1_Weight",
+                Average_Star_Probe_kg = "Star_Probe_kg",
+                Ultrasound_10th_Rib_Back_Fat_mm_6.2 = "6.2_BF10",
+                LD_6.2 = "6.2_LD",
+                Ultrasound_Loin_Eye_Area_cm2_6.2 = "6.2_LMA",
+                Ultrasound_10th_Rib_Back_Fat_mm_7.29 = "7.29_BF10",
+                Ultrasound_Loin_Eye_Area_cm2_7.29 = "7.29_LMA") %>% 
+  dplyr::mutate(
+    Gender = case_when(
+      Gender == "G" ~ "Gilt",
+      Gender == "B" ~ "Barrow"),
+    
+    # Make dates
+    Slaughter_Date = 
+      lubridate::parse_date_time(Slaughter_Date, orders = "m/d/y"),
+    Loin_Collection_Date = 
+      lubridate::parse_date_time(Loin_Collection_Date, orders = "m/d/y"),
+    Fabrication_Date = 
+      lubridate::parse_date_time(Fabrication_Date, orders = "m/d/y"),
+    
+    # Weight gain
+    Gain_kg_5.5_to_6.2 = Trial_Weight_kg_6.2.2022 - Trial_Weight_kg_5.5.2022,
+    Gain_kg_6.2_to_7.1 = Trial_Weight_kg_7.1.2022 - Trial_Weight_kg_6.2.2022,
+    Gain_kg_7.1_to_8.1 = Trial_Weight_kg_8.1.2022 - Trial_Weight_kg_7.1.2022,
+    Gain_kg_5.5_to_8.1 = Trial_Weight_kg_8.1.2022 - Trial_Weight_kg_5.5.2022,
+    
+    # Average daily gain calculations
+    ADG_kg_5.5_to_6.2 = (Gain_kg_5.5_to_6.2) / 
+      time_length(interval(ymd("2022-05-05"), ymd("2022-06-02")), "day"),
+    ADG_kg_6.2_to_7.1 = (Gain_kg_6.2_to_7.1) / 
+      time_length(interval(ymd("2022-06-02"), ymd("2022-07-01")), "day"),
+    ADG_kg_7.1_to_8.1 = (Gain_kg_7.1_to_8.1) / 
+      time_length(interval(ymd("2022-07-01"), ymd("2022-08-01")), "day"),
+    ADG_kg_5.5_to_8.1 = (Gain_kg_5.5_to_8.1) / 
+      time_length(interval(ymd("2022-05-05"), ymd("2022-08-01")), "day"))
+
+# Here, I reclassified the samples to match the categories from P1050.
+# A = Average_Star_Probe_kg: 3.43 - 4.55 kg;    samples categorized to A
+# B = Average_Star_Probe_kg: 4.66 - 5.00 kg;    samples categorized to B
+# C = Average_Star_Probe_kg: 5.20 - 5.64 kg;    samples categorized to C
+# D = Average_Star_Probe_kg: 5.70 - 7.41 kg;    samples categorized to D
+
+Ca_Cl2 <- Ca_Cl2 %>% 
+  dplyr::mutate(
+    P1050_Tenderness_Category = case_when(
+      Average_Star_Probe_kg < 4.55 ~ "A",
+      Average_Star_Probe_kg >= 4.66 & Average_Star_Probe_kg <= 5.00 ~ "B",
+      Average_Star_Probe_kg >= 5.20 & Average_Star_Probe_kg <= 5.64 ~ "C",
+      Average_Star_Probe_kg >= 5.70 & Average_Star_Probe_kg <= 7.41 ~ "D"),
+    .after = Average_Star_Probe_kg)
+
+Ca_Cl2 <- Ca_Cl2 %>% 
+  dplyr::select(Slaughter_Date:Ham_Tattoo, Trial_Weight_kg_5.5.2022, 
+                Trial_Weight_kg_6.2.2022, Trial_Weight_kg_7.1.2022, 
+                Trial_Weight_kg_8.1.2022, Gain_kg_5.5_to_6.2, Gain_kg_6.2_to_7.1,
+                Gain_kg_7.1_to_8.1, Gain_kg_5.5_to_8.1, ADG_kg_5.5_to_6.2,
+                ADG_kg_6.2_to_7.1, ADG_kg_7.1_to_8.1, ADG_kg_5.5_to_8.1,
+                Ultrasound_10th_Rib_Back_Fat_mm_6.2, Ultrasound_10th_Rib_Back_Fat_mm_7.29,
+                LD_6.2, Ultrasound_Loin_Eye_Area_cm2_6.2, Ultrasound_Loin_Eye_Area_cm2_7.29,
+                Live_Weight_kg, HCW_lbs, HCW_kg, Dressing_perc, Lean_perc, Loin_Depth_mm,
+                Fat_Depth_mm, Purge_perc, Drip_Loss_perc, Aged_pH,
+                Visual_Color, Visual_Marbling, L_Value, a_Value, b_value,
+                Cook_Loss_perc, Average_Star_Probe_kg, P1050_Tenderness_Category) 
+
+```
+
+This is the processed and cleaned quality data set for the Calcium Chloride study.
+
+```{r}
+#| eval: true
+#| include: true
+#| code-fold: false
+
+glimpse(Ca_Cl2)
+
+# readr::write_csv(Ca_Cl2, file = "Data/Calcium_Chloride/Calcium_Chloride_Processed_Quality.csv")
+
+```
+:::
